@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Standard Grating Diffraction (Fraunhofer)</title>
+<style>
+  :root{
+    --bg: #0a0e12;
+    --panel: #10161c;
+    --panel-line: #24303a;
+    --trace: #6fe0a8;
+    --trace-dim: #2f6b4c;
+    --grid: #1c262f;
+    --grid-strong: #2e3d49;
+    --cyan: #57d8e0;
+    --text: #d8e2e8;
+    --text-dim: #7f929c;
+    --danger: #ff6b6b;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; background:var(--bg); color:var(--text);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  .wrap{ max-width: 1180px; margin: 0 auto; padding: 22px 20px 40px; }
+
+  header{ margin-bottom:16px; }
+  header h1{
+    font-size: 20px; margin: 0 0 4px; font-weight: 600; letter-spacing: 0.2px;
+    color: #f0f4f6;
+  }
+  header p{ margin:0; color:var(--text-dim); font-size:13px; line-height:1.5; max-width:760px;}
+  header .eqn{ color:var(--cyan); font-size:12.5px; margin-top:8px; }
+
+  .layout{ display:grid; grid-template-columns: 250px 1fr; gap:16px; align-items:start; }
+  @media (max-width: 860px){ .layout{ grid-template-columns: 1fr; } }
+
+  .panel{
+    background:var(--panel); border:1px solid var(--panel-line); border-radius:6px;
+    padding:14px;
+  }
+  .panel + .panel{ margin-top:12px; }
+  .panel h2{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:1.1px; color:var(--text-dim);
+    margin:0 0 10px; font-weight:600;
+  }
+
+  .field{ margin-bottom:10px; }
+  .field label{ display:block; font-size:11.5px; color:var(--text-dim); margin-bottom:3px; }
+  .field input, .field select{
+    width:100%; background:#0d1318; border:1px solid var(--panel-line); color:var(--text);
+    padding:6px 8px; border-radius:4px; font-size:12.5px;
+  }
+  .field input:focus, .field select:focus{ outline:1px solid var(--cyan); border-color:var(--cyan); }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+  .btnrow{ display:flex; flex-wrap:wrap; gap:6px; margin-top:2px; }
+  button{
+    font: inherit; font-size:12px; cursor:pointer; border-radius:4px; border:1px solid var(--panel-line);
+    background:#141c22; color:var(--text); padding:6px 10px; transition: background .12s, border-color .12s;
+  }
+  button:hover{ background:#1a242b; border-color:var(--cyan); }
+  button.primary{ background: #163a28; border-color:#2f6b4c; color:#c8f5da; }
+  button.primary:hover{ background:#1c4a32; border-color:var(--trace); }
+  button.small{ padding:4px 8px; font-size:11px; }
+  button:disabled{ opacity:.45; cursor:default; }
+
+  .check{ display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text); margin-top:8px;}
+  .check input{ width:auto; }
+
+  .plotcol{ min-width:0; }
+  .canvaswrap{
+    position:relative; background:#05080a; border:1px solid var(--panel-line); border-radius:6px;
+    overflow:hidden;
+  }
+  canvas{ display:block; width:100%; height:460px; cursor:crosshair; }
+  .hint{
+    position:absolute; bottom:8px; right:10px; font-size:10.5px; color:var(--text-dim);
+    background:rgba(5,8,10,0.55); padding:3px 7px; border-radius:4px; pointer-events:none;
+  }
+  .legend{
+    position:absolute; top:8px; right:10px; font-size:11px; color:var(--text-dim);
+    background:rgba(5,8,10,0.6); padding:4px 8px; border-radius:4px; pointer-events:none;
+    display:flex; gap:12px;
+  }
+  .legend .sw{ display:inline-block; width:14px; height:2px; margin-right:5px; vertical-align:middle; }
+  .legend .sw.solid{ background:var(--trace); }
+  .scrubreadout{
+    font-size:12px; margin-bottom:8px; padding:8px 12px; border-radius:6px;
+    background:var(--panel); border:1px solid var(--panel-line); color:var(--text-dim);
+    display:flex; flex-wrap:wrap; gap:16px; align-items:center; min-height:16px;
+  }
+  .scrubreadout b.iv{ color:var(--trace); }
+  .scrubreadout .label{ color:var(--text-dim); font-size:10.5px; text-transform:uppercase; letter-spacing:0.8px; }
+  .progresswrap{
+    height:3px; width:100%; background:#0d1318;
+  }
+  .progressbar{ height:100%; width:0%; background:var(--trace); transition:width .05s linear; }
+
+  .statusline{
+    margin-top:8px; font-size:11.5px; color:var(--text-dim); display:flex; flex-wrap:wrap; gap:14px;
+  }
+  .statusline span b{ color:var(--text); font-weight:600; }
+
+  .presetgrid{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+
+  .warn{ font-size:11px; color:#e8b96a; margin-top:6px; line-height:1.4;}
+
+  .peaktable{ width:100%; border-collapse:collapse; margin-top:8px; font-size:11.5px; }
+  .peaktable th, .peaktable td{ text-align:right; padding:4px 8px; border-bottom:1px solid var(--panel-line); }
+  .peaktable th:first-child, .peaktable td:first-child{ text-align:left; }
+  .peaktable th{ color:var(--text-dim); font-weight:600; text-transform:uppercase; font-size:10px; letter-spacing:0.6px; }
+  .peaktable td.iv{ color:var(--trace); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Standard N-slit grating diffraction, I(x) &mdash; Fraunhofer (far-field)</h1>
+    <p>This is the textbook multi-slit diffraction-grating formula, coded independently of the exact-path (Fresnel) equation. N grooves of spacing 1/&Lambda; are illuminated at angle &alpha; to the grating surface; the screen sits a perpendicular distance d&#8320; away, with the grating surface tilted by &beta; from the screen's normal. In the far field the phase from groove to groove grows <i>linearly</i> with groove index n, so the coherent sum collapses to the closed-form grating function below.</p>
+    <p class="eqn mono">&phi;(x) = (2&pi;/&lambda;&Lambda;)&middot;[ (d&#8320;cos&beta; &minus; x&middot;sin&beta;)/&radic;(d&#8320;&sup2;+x&sup2;) &minus; cos&alpha; ]</p>
+    <p class="eqn mono">I(x) = A&#8320;&sup2; &middot; [ sin((N+1)&phi;/2) / sin(&phi;/2) ]&sup2;</p>
+  </header>
+
+  <div class="layout">
+    <div class="controlcol">
+      <div class="panel">
+        <h2>Parameters</h2>
+        <div class="row2">
+          <div class="field"><label>A&#8320;</label><input id="p_A0" type="number" value="1" step="0.1"></div>
+          <div class="field"><label>D (mm)</label><input id="p_D" type="number" value="10" step="1"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>λ (nm)</label><input id="p_lambda" type="number" value="550" step="1"></div>
+          <div class="field"><label for="p_Lambda">Grating density Λ (1/m)</label><input id="p_Lambda" type="number" value="988000" min="0" step="any"></div>
+          <div class="field"><label for="p_pitch">Track pitch (nm)</label><input id="p_pitch" type="number" value="1012.1457489878543" min="0" step="any"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>α (deg)</label><input id="p_alpha" type="number" value="45" step="1"></div>
+          <div class="field"><label>β (deg)</label><input id="p_beta" type="number" value="45" step="1"></div>
+        </div>
+        <div class="field"><label>d&#8320; (m)</label><input id="p_d0" type="number" value="0.2" step="0.01"></div>
+      </div>
+
+      <div class="panel">
+        <h2>View window</h2>
+        <div class="row2">
+          <div class="field"><label>Center x (mm)</label><input id="v_center" type="number" value="0" step="0.1"></div>
+          <div class="field"><label>Half-span (mm)</label><input id="v_span" type="number" value="300" step="0.1"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Center I</label><input id="v_yCenter" type="number" value="1" min="0" step="any"></div>
+          <div class="field"><label>Vertical half-span (I; decades on log scale)</label><input id="v_ySpan" type="number" value="" placeholder="Auto" min="0" step="any"></div>
+        </div>
+        <div class="warn">Leave vertical half-span blank for automatic height. On log scale, each unit is one decade.</div>
+        <div class="field">
+          <label>Sample spacing Δx (mm)</label>
+          <input id="v_sampleDx" type="number" value="0.05" min="1e-9" step="0.01">
+        </div>
+        <div class="warn">Use the same Δx when comparing windows. Smaller Δx resolves narrower peaks, but takes longer.</div>
+        <label class="check"><input type="checkbox" id="v_log" checked> Log scale (left axis)</label>
+        <label class="check"><input type="checkbox" id="v_smooth" checked> Smooth curve (remove fine ripples)</label>
+        <div class="field" style="margin-top:6px;"><label>Smoothing window (mm)</label><input id="smoothWindow" type="number" value="0.1" min="0.05" step="0.05"></div>
+        <div class="btnrow" style="margin-top:10px;">
+          <button class="primary" id="btnCompute">Sweep ▸</button>
+          <button class="small" id="btnReset">Reset view</button>
+        </div>
+        <div class="warn">This model gives one clean principal maximum at x = 0 with fast-decaying ripples.</div>
+      </div>
+
+      <div class="panel">
+        <h2>Jump to span (centered on 0)</h2>
+        <div class="presetgrid">
+          <button class="small" data-span="0.00001">±0.01 mm</button>
+          <button class="small" data-span="0.0001">±0.1 mm</button>
+          <button class="small" data-span="0.001">±1 mm</button>
+          <button class="small" data-span="0.01">±10 mm</button>
+          <button class="small" data-span="0.1">±100 mm</button>
+          <button class="small" data-span="0.3">±300 mm</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="plotcol">
+      <div class="scrubreadout mono" id="scrubReadout"><span class="label">Move the mouse over the plot &rarr;</span></div>
+      <div class="canvaswrap" id="canvasWrap">
+        <canvas id="plot"></canvas>
+        <div class="legend" id="legend">
+          <span id="legendIntensity"><span class="sw solid"></span>I(x)</span>
+        </div>
+        <div class="hint">move mouse to inspect</div>
+        <div class="progresswrap"><div class="progressbar" id="progressbar"></div></div>
+      </div>
+      <div class="statusline mono">
+        <span>N emitters: <b id="statN">–</b></span>
+        <span>x range: <b id="statRange">–</b></span>
+        <span>max I: <b id="statMax">–</b></span>
+        <span>compute time: <b id="statTime">–</b></span>
+      </div>
+      <div class="panel" style="margin-top:10px;">
+        <h2>Peaks in this window</h2>
+        <div class="row2" style="max-width:320px;">
+          <div class="field"><label>Peak threshold (% of window max I)</label><input id="peakThreshold" type="number" value="5" min="0" max="100" step="1"></div>
+        </div>
+        <div id="peakList" class="mono" style="font-size:11.5px; color:var(--text-dim);">Run a sweep to detect peaks.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const canvas = $('plot');
+  const ctx = canvas.getContext('2d');
+  const wrap = $('canvasWrap');
+  const scrubReadout = $('scrubReadout');
+  const progressbar = $('progressbar');
+
+  // Fixed drawing and export size. CSS scales this canvas to fit the window.
+  const GRAPH_W = 900, GRAPH_H = 460, EXPORT_SCALE = 2;
+  let logicalW = GRAPH_W, logicalH = GRAPH_H;
+  function resizeCanvas(){
+    logicalW = GRAPH_W;
+    logicalH = GRAPH_H;
+    canvas.width = GRAPH_W*EXPORT_SCALE;
+    canvas.height = GRAPH_H*EXPORT_SCALE;
+    ctx.setTransform(EXPORT_SCALE,0,0,EXPORT_SCALE,0,0);
+  }
+  window.addEventListener('resize', ()=>{ resizeCanvas(); if(lastResult) redrawFromCache(); });
+  resizeCanvas();
+
+  function getParams(){
+    return {
+      A0: parseFloat($('p_A0').value),
+      D: (parseFloat($('p_D').value) * 1e-3),
+      lambda: parseFloat($('p_lambda').value) * 1e-9,
+      Lambda: parseFloat($('p_Lambda').value),
+      alpha: parseFloat($('p_alpha').value) * Math.PI/180,
+      beta: parseFloat($('p_beta').value) * Math.PI/180,
+      d0: parseFloat($('p_d0').value)
+    };
+  }
+
+  function intensityAt(x, pr, N){
+    const r0 = Math.sqrt(pr.d0*pr.d0 + x*x);
+    const bracket = (pr.d0*Math.cos(pr.beta) - x*Math.sin(pr.beta))/r0 - Math.cos(pr.alpha);
+    const phi = (2*Math.PI/(pr.lambda*pr.Lambda)) * bracket;
+    const half = phi/2;
+    const s = Math.sin(half);
+    const ratio = (Math.abs(s) < 1e-12) ? (N+1) : Math.sin((N+1)*half)/s;
+    return pr.A0*pr.A0*ratio*ratio;
+  }
+
+  // ---- plotting geometry ----
+  let busy = false;
+
+  function fmtX(v){
+    if(v === null || v === undefined || !Number.isFinite(v)) return '–';
+    const mm=v*1000;
+    return (mm===0 ? '0' : Number(mm.toPrecision(7)).toString()) + ' mm';
+  }
+  function fmtI(v){
+    if(v === null || v === undefined || !isFinite(v)) return '–';
+    if(v === 0) return '0';
+    if(Math.abs(v) >= 1e5 || Math.abs(v) < 1e-3) return v.toExponential(2);
+    return v.toFixed(3);
+  }
+
+  function drawAxes(xMin, xMax, yMinL, yMaxL, logScale){
+    const W = logicalW, H = logicalH;
+    const padL = 64, padR = 18, padT = 16, padB = 34;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+
+    ctx.fillStyle = '#05080a';
+    ctx.fillRect(0,0,W,H);
+
+    ctx.strokeStyle = '#1c262f';
+    ctx.lineWidth = 1;
+    const nX = 6, nY = 5;
+    ctx.font = '11px ui-monospace, monospace';
+
+    // vertical gridlines + x labels
+    ctx.fillStyle = '#7f929c';
+    for(let i=0;i<=nX;i++){
+      const gx = padL + plotW*i/nX;
+      ctx.beginPath(); ctx.moveTo(gx,padT); ctx.lineTo(gx,padT+plotH); ctx.stroke();
+      const xv = xMin + (xMax-xMin)*i/nX;
+      ctx.textAlign = 'center';
+      ctx.fillText(fmtX(xv), gx, padT+plotH+18);
+    }
+    // horizontal gridlines (based on left axis)
+    for(let j=0;j<=nY;j++){
+      const gy = padT + plotH*j/nY;
+      ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(padL+plotW,gy); ctx.stroke();
+    }
+    // left axis labels (intensity)
+    ctx.fillStyle = 'var-trace-label';
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--trace').trim();
+    ctx.textAlign = 'right';
+    for(let j=0;j<=nY;j++){
+      const gy = padT + plotH*j/nY;
+      const yv = yMaxL - (yMaxL-yMinL)*j/nY;
+      const label = logScale ? ('1e'+yv.toFixed(1)) : fmtI(yv);
+      ctx.fillText(label, padL-8, gy+4);
+    }
+
+    
+
+    // axis frame
+    ctx.strokeStyle = '#2e3d49';
+    ctx.beginPath(); ctx.moveTo(padL,padT); ctx.lineTo(padL,padT+plotH); ctx.lineTo(padL+plotW,padT+plotH); ctx.stroke();
+    
+
+    ctx.fillStyle = '#57d8e0';
+    ctx.textAlign = 'center';
+    ctx.font = '12px ui-sans-serif, sans-serif';
+    ctx.fillText('x (mm)', padL+plotW/2, H-4);
+
+    ctx.save();
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--trace').trim();
+    ctx.translate(14, padT+plotH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText(logScale ? 'log10 intensity' : 'intensity', 0, 0);
+    ctx.restore();
+
+    
+
+    return {padL,padR,padT,padB,plotW,plotH};
+  }
+
+  function renderIntensity(ysLeft, xMin, xMax, logScale, upTo, xs){
+    let yMinL = Infinity, yMaxL = -Infinity;
+    for(let i=0;i<ysLeft.length;i++){
+      const v = ysLeft[i];
+      if(v === null || !isFinite(v)) continue;
+      if(v<yMinL) yMinL=v;
+      if(v>yMaxL) yMaxL=v;
+    }
+    if(!isFinite(yMinL) || !isFinite(yMaxL)){ yMinL=0; yMaxL=1; }
+    if(yMinL === yMaxL){ yMinL -= 1; yMaxL += 1; }
+    const centerI = Number($('v_yCenter').value);
+    const center = logScale ? Math.log10(centerI) : centerI;
+    const manualSpan = Number($('v_ySpan').value);
+    if(Number.isFinite(center) && centerI >= 0){
+      const autoSpan = Math.max(Math.abs(yMinL-center), Math.abs(yMaxL-center)) * 1.08;
+      const halfSpan = $('v_ySpan').value.trim() && Number.isFinite(manualSpan) && manualSpan > 0 ? manualSpan : Math.max(autoSpan, 1e-9);
+      yMinL = center-halfSpan;
+      yMaxL = center+halfSpan;
+    } else {
+      const pad = (yMaxL-yMinL)*0.08;
+      yMinL -= pad; yMaxL += pad;
+    }
+
+const geo = drawAxes(xMin, xMax, yMinL, yMaxL, logScale);
+    const {padL,padT,plotW,plotH} = geo;
+    const lim = (upTo===undefined) ? ysLeft.length : upTo;
+
+    let started = false;
+    // Intensity trace.
+    {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(padL,padT,plotW,plotH); ctx.clip();
+      ctx.beginPath();
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--trace').trim();
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = 'rgba(255,176,32,0.55)';
+      ctx.shadowBlur = 6;
+      for(let i=0;i<lim;i++){
+        const v = ysLeft[i];
+        const px = padL + plotW*(xs ? (xs[i]-xMin)/(xMax-xMin) : i/(ysLeft.length-1));
+        if(v===null || !isFinite(v)){ started=false; continue; }
+        const py = padT + plotH*(1 - (v-yMinL)/(yMaxL-yMinL));
+        if(!started){ ctx.moveTo(px,py); started=true; } else { ctx.lineTo(px,py); }
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+
+    
+
+    return {yMinL,yMaxL,geo};
+  }
+
+  let lastResult = null;
+  let plotScreenXMin = null;
+
+  async function sweep(){
+    if(busy) return;
+    busy = true;
+    $('btnCompute').disabled = true;
+    const t0 = performance.now();
+
+    const pr = getParams();
+    const N = Math.floor(pr.D*pr.Lambda/Math.sin(pr.alpha));
+    const center = (parseFloat($('v_center').value) * 1e-3);
+    const span = Math.abs((parseFloat($('v_span').value) * 1e-3));
+    const xMin = center - span, xMax = center + span;
+    let sampleDx = (parseFloat($('v_sampleDx').value) * 1e-3);
+    if(!isFinite(sampleDx) || sampleDx<=0) sampleDx = 0.00005;
+    const logScale = $('v_log').checked;
+
+    resizeCanvas();
+    // Use a fixed, user-selected physical sampling grid anchored at x = 0.
+    // Nested windows therefore evaluate exactly the same x positions.
+    const screenXMin = -pr.d0 * Math.tan(pr.beta);
+    plotScreenXMin = screenXMin;
+    const calculationXMin = screenXMin - 0.050; // 50 mm buffer beyond the screen boundary.
+    const validXMin = Math.max(xMin, calculationXMin);
+    let sampleXMin = Math.ceil(validXMin/sampleDx - 1e-12)*sampleDx;
+    if(sampleXMin < calculationXMin) sampleXMin += sampleDx;
+    const nPixels = Math.max(0, Math.floor((xMax-sampleXMin)/sampleDx + 1e-12) + 1);
+    lastResult = null;
+    const xs = Array.from({length:nPixels}, (_, k) => sampleXMin + k*sampleDx);
+    const ysRaw = new Array(nPixels).fill(0);
+    const ysPlot = new Array(nPixels).fill(null);
+
+    $('statN').textContent = N.toLocaleString();
+    $('statRange').textContent = fmtX(xMin) + ' … ' + fmtX(xMax);
+
+    const batchSize = Math.max(1, Math.floor(2000000 / (N+1)) || 1);
+    let i = 0;
+    let runningMax = -Infinity;
+
+    function step(){
+      const end = Math.min(nPixels, i+batchSize);
+      for(; i<end; i++){
+        const x = xs[i];
+        const intensity = intensityAt(x, pr, N);
+        ysRaw[i] = intensity;
+        if(intensity>runningMax) runningMax = intensity;
+        ysPlot[i] = logScale ? (intensity>0 ? Math.log10(intensity) : null) : intensity;
+        
+      }
+      
+      progressbar.style.width = (nPixels ? 100*i/nPixels : 100).toFixed(1)+'%';
+      renderIntensity(ysPlot, xMin, xMax, logScale, i, xs);
+      $('statMax').textContent = fmtI(isFinite(runningMax) ? runningMax : null);
+      
+      if(i<nPixels){
+        requestAnimationFrame(step);
+      } else {
+        const t1 = performance.now();
+        $('statTime').textContent = ((t1-t0)/1000).toFixed(2)+' s';
+        progressbar.style.width = '0%';
+        busy = false;
+        $('btnCompute').disabled = false;
+        lastResult = {
+          xMin, xMax, screenXMin, calculationXMin, nPixels, sampleDx, sampleXMin, xs, logScale,
+          rawI: ysRaw,        // unsmoothed intensity, straight from the sweep
+          ysRaw, ysPlot // "current display" arrays, updated by updateDisplay()
+        };
+        updateDisplay();
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  // Box-average the linearly interpolated signal over the requested physical width.
+  // This avoids rounding different window widths into the same odd sample count.
+  function smoothArray(arr, widthM, sampleDx){
+    const n = arr.length;
+    if(widthM<=0 || n<2) return arr.slice();
+    const steps = 12; // trapezoidal integration points across each smoothing window
+    const halfSteps = widthM/(2*sampleDx);
+    const out = new Array(n);
+    for(let k=0;k<n;k++){
+      let sum = 0;
+      for(let s=0;s<=steps;s++){
+        const position = Math.max(0, Math.min(n-1, k-halfSteps + 2*halfSteps*s/steps));
+        const lo = Math.floor(position);
+        const hi = Math.min(n-1, lo+1);
+        const value = arr[lo] + (arr[hi]-arr[lo])*(position-lo);
+        sum += (s===0 || s===steps) ? value/2 : value;
+      }
+      out[k] = sum/steps;
+    }
+    return out;
+  }
+
+  // Recompute the displayed intensity and peak statistics from the cached
+  // raw sweep data, applying smoothing if requested. This is cheap (pure array math,
+  // no re-summing the grating), so it updates live without needing a re-sweep.
+  function updateDisplay(){
+    if(!lastResult) return;
+    const {xMin, xMax, sampleDx, xs, logScale, rawI} = lastResult;
+    const smoothWidthM = Math.max(0, parseFloat($('smoothWindow').value)*1e-3 || 0);
+    const curI = $('v_smooth').checked ? smoothArray(rawI, smoothWidthM, sampleDx) : rawI;
+    const curPlot = curI.map(v => logScale ? (v>0 ? Math.log10(v) : null) : v);
+    lastResult.ysRaw = curI;
+    lastResult.ysPlot = curPlot;
+    let maxI = -Infinity;
+    for(const value of curI) if(value>maxI) maxI=value;
+    $('statMax').textContent = fmtI(isFinite(maxI) ? maxI : null);
+    renderIntensity(curPlot, xMin, xMax, logScale, undefined, xs);
+  }
+  $('v_smooth').addEventListener('change', updateDisplay);
+  $('smoothWindow').addEventListener('input', updateDisplay);
+  ['v_yCenter','v_ySpan'].forEach(id => $(id).addEventListener('input', redrawFromCache));
+
+  // Segment the current window's intensity trace into distinct bright "peak groups"
+  // (contiguous runs above a threshold fraction of the window's own max I), and report
+  // the peak intensity plus the steepest rising (max) and falling (min) slope within
+  // each group separately, rather than one number for the whole window.
+  // Find top shoulders from the sampled, currently displayed intensity.
+  // Peak positions are independent of logarithmic display.
+  function peakShoulderMidpoint(values,xs,start,end){
+    // Use the outer top turning points of the threshold-defined peak group,
+    // not the highest internal ripple or the steepest internal slope.
+    // A flat maximum has two shoulders: its first and last sample.
+    const tops=[];
+    for(let k=Math.max(1,start);k<=Math.min(end,values.length-2);k++){
+      if(!(values[k]>values[k-1])) continue;
+      let plateauEnd=k;
+      while(plateauEnd+1<values.length && values[plateauEnd+1]===values[k]) plateauEnd++;
+      if(plateauEnd+1<values.length && values[plateauEnd]>values[plateauEnd+1])
+        tops.push({left:k,right:plateauEnd});
+      k=plateauEnd;
+    }
+    // A group cut by the view boundary does not establish both outer shoulders.
+    if(start===0 || end===values.length-1 || !tops.length) return null;
+    const left=tops[0].left,right=tops[tops.length-1].right;
+    return {xLeft:xs[left],xRight:xs[right],xPeak:(xs[left]+xs[right])/2};
+  }
+
+  function analyzePeaks(){
+    if(!lastResult) return;
+    const {ysRaw, nPixels, xs} = lastResult;
+    const listEl = $('peakList');
+    let globalMax = -Infinity;
+    for(let i=0;i<nPixels;i++){ if(ysRaw[i]>globalMax) globalMax = ysRaw[i]; }
+    if(!isFinite(globalMax) || globalMax<=0){ lastResult.peaks=[]; listEl.innerHTML = 'No signal found in this window.'; return; }
+    let thresholdPct = parseFloat($('peakThreshold').value);
+    if(!isFinite(thresholdPct)) thresholdPct = 5;
+    thresholdPct = Math.max(0, Math.min(100, thresholdPct));
+    const tau = globalMax * thresholdPct/100;
+
+    const peaks = [];
+    let curStart = null;
+    for(let i=0;i<=nPixels;i++){
+      const above = (i<nPixels) && ysRaw[i] > tau;
+      if(above && curStart===null) curStart = i;
+      if(!above && curStart!==null){
+        const curEnd = i-1;
+        let maxI=-Infinity, maxIIdx=curStart;
+        for(let k=curStart;k<=curEnd;k++){
+          if(ysRaw[k]>maxI){ maxI=ysRaw[k]; maxIIdx=k; }
+          
+        }
+        const shoulders = peakShoulderMidpoint(ysRaw,xs,curStart,curEnd);
+        const xPeak = shoulders ? shoulders.xPeak : null;
+        peaks.push({
+          xPeak, maxI, shoulders,
+
+        });
+        curStart = null;
+      }
+    }
+
+    lastResult.peaks=peaks;
+    if(peaks.length===0){
+      listEl.innerHTML = 'No peak found above the '+thresholdPct+'% threshold &mdash; try lowering it.';
+      return;
+    }
+    const rows = peaks.map((p,idx)=>
+      '<tr><td>'+(idx+1)+'</td><td>'+(p.shoulders ? fmtX(p.shoulders.xLeft) : '&ndash;')+'</td><td>'+(p.shoulders ? fmtX(p.shoulders.xRight) : '&ndash;')+'</td><td title="'+(p.shoulders ? 'Top shoulders: '+fmtX(p.shoulders.xLeft)+' and '+fmtX(p.shoulders.xRight) : 'Both top shoulders are not resolved; expand the view or reduce sample spacing')+'">'+(p.xPeak===null ? '&ndash;' : fmtX(p.xPeak))+'</td>'+ 
+      '<td class="iv">'+fmtI(p.maxI)+'</td></tr>'
+    ).join('');
+    listEl.innerHTML = '<table class="peaktable"><thead><tr>'+
+      '<th>#</th><th>x (left turning point)</th><th>x (right turning point)</th><th>x (peak midpoint)</th><th>max I</th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table><p class="muted">x (peak) = (x of left top shoulder + x of right top shoulder) / 2, using the first and last top turning points in each threshold-defined peak group, estimated from the displayed intensity samples. White dotted lines mark these midpoints. A dash means both shoulders are not resolved in this view.</p>';
+  }
+  $('peakThreshold').addEventListener('input', ()=>{ if(lastResult){ redrawFromCache(); } });
+
+  function redrawFromCache(){
+    if(!lastResult) return;
+    renderIntensity(lastResult.ysPlot, lastResult.xMin, lastResult.xMax, lastResult.logScale, undefined, lastResult.xs);
+  }
+
+  let drawGeoCache = null;
+  const origRenderIntensity = renderIntensity;
+  renderIntensity = function(ysLeft, xMin, xMax, logScale, upTo, xs){
+    const r = origRenderIntensity(ysLeft, xMin, xMax, logScale, upTo, xs);
+    drawGeoCache = r.geo;
+    // Draw the same y = p% × max(I) threshold used by analyzePeaks().
+    if(lastResult && lastResult.ysRaw){
+      let maxI = -Infinity;
+      for(const value of lastResult.ysRaw){ if(value > maxI) maxI = value; }
+      let thresholdPct = parseFloat($('peakThreshold').value);
+      if(!isFinite(thresholdPct)) thresholdPct = 5;
+      thresholdPct = Math.max(0, Math.min(100, thresholdPct));
+      const threshold = maxI * thresholdPct / 100;
+      const displayThreshold = logScale ? (threshold > 0 ? Math.log10(threshold) : null) : threshold;
+      if(displayThreshold !== null && displayThreshold >= r.yMinL && displayThreshold <= r.yMaxL){
+        const {padL, plotW, padT, plotH} = r.geo;
+        const py = padT + plotH * (1 - (displayThreshold-r.yMinL)/(r.yMaxL-r.yMinL));
+        ctx.save();
+        ctx.setLineDash([6,4]);
+        ctx.strokeStyle = 'rgba(255, 184, 77, 0.95)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(padL+plotW, py); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255, 210, 128, 0.98)';
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = py < padT+16 ? 'top' : 'bottom';
+        ctx.fillText('Peak threshold: y = '+fmtI(threshold)+' ('+thresholdPct+'% of max I)', padL+plotW-6, py < padT+16 ? py+4 : py-4);
+        ctx.restore();
+      }
+    }
+    // Avoid applying completed peak markers to an in-progress sweep.
+    if(lastResult && ysLeft===lastResult.ysPlot && upTo===undefined){
+      analyzePeaks();
+      drawPeakCoordinates(lastResult.peaks || []);
+    }
+    if(Number.isFinite(plotScreenXMin) && plotScreenXMin >= xMin && plotScreenXMin <= xMax){
+      const {padL, plotW, padT, plotH} = r.geo;
+      const boundaryPx = padL + plotW*(plotScreenXMin-xMin)/(xMax-xMin);
+      ctx.save();
+      ctx.strokeStyle = '#38a5ff';
+      ctx.fillStyle = '#38a5ff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([2, 5]);
+      ctx.beginPath();
+      ctx.moveTo(boundaryPx, padT);
+      ctx.lineTo(boundaryPx, padT+plotH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = boundaryPx > padL+plotW/2 ? 'right' : 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('Screen boundary: '+fmtX(plotScreenXMin),
+        boundaryPx + (ctx.textAlign === 'right' ? -6 : 6), padT+6);
+      ctx.restore();
+    }
+    return r;
+  };
+
+  // Peak coordinates share the same values as the peak table.
+  function drawPeakCoordinates(peaks){
+    if(!drawGeoCache || !lastResult) return;
+    const {padL,plotW,padT,plotH}=drawGeoCache;
+    const {xMin,xMax}=lastResult;
+    ctx.save();
+    ctx.font='11px ui-monospace, monospace';
+    ctx.textAlign='center';ctx.textBaseline='bottom';
+    const rowEnds=[];
+    for(const peak of peaks){
+      if(!Number.isFinite(peak.xPeak) || peak.xPeak<xMin || peak.xPeak>xMax) continue;
+      const px=padL+(peak.xPeak-xMin)/(xMax-xMin)*plotW;
+      ctx.strokeStyle='rgba(255,255,255,0.9)';ctx.lineWidth=1;
+      ctx.setLineDash([2,4]);ctx.beginPath();ctx.moveTo(px,padT+plotH);ctx.lineTo(px,padT);ctx.stroke();ctx.setLineDash([]);
+      const label=fmtX(peak.xPeak),width=ctx.measureText(label).width+8;
+      const labelX=Math.max(padL+width/2,Math.min(padL+plotW-width/2,px));
+      let row=0;while(row<rowEnds.length && labelX-width/2<rowEnds[row]+6)row++;
+      rowEnds[row]=labelX+width/2;
+      const y=padT+plotH-6-row*16;
+      ctx.fillStyle='rgba(5,8,10,0.88)';ctx.fillRect(labelX-width/2,y-13,width,15);
+      ctx.fillStyle='#fff';ctx.fillText(label,labelX,y);
+    }
+    ctx.restore();
+  }
+
+  function drawCrosshairAt(pxClientX){
+    if(!lastResult || !drawGeoCache) return;
+    const {padL, plotW, padT, plotH} = drawGeoCache;
+    const frac = (pxClientX-padL)/plotW;
+    if(frac<0||frac>1){
+      redrawFromCache();
+      scrubReadout.innerHTML = '<span class="label">Move the mouse over the plot &rarr;</span>';
+      return;
+    }
+    const targetX = lastResult.xMin + (lastResult.xMax-lastResult.xMin)*frac;
+    if(targetX < lastResult.calculationXMin || lastResult.nPixels === 0){
+      redrawFromCache();
+      scrubReadout.textContent = 'Outside the calculation range.';
+      return;
+    }
+    const idx = Math.max(0, Math.min(lastResult.nPixels-1, Math.round((targetX-lastResult.sampleXMin)/lastResult.sampleDx)));
+    const x = lastResult.xs[idx];
+    const val = lastResult.ysRaw[idx];
+    scrubReadout.innerHTML = '<span class="label">At cursor</span>' +
+      ' x = <b class="iv">'+fmtX(x)+'</b>' +
+      ' &nbsp; I = <b class="iv">'+fmtI(val)+'</b>';
+
+    redrawFromCache();
+    const px = padL + plotW*(x-lastResult.xMin)/(lastResult.xMax-lastResult.xMin);
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 1;
+    ctx.moveTo(px, padT);
+    ctx.lineTo(px, padT+plotH);
+    ctx.stroke();
+  }
+
+  canvas.addEventListener('mousemove', (ev)=>{
+    if(!lastResult) return;
+    const rect = canvas.getBoundingClientRect();
+    drawCrosshairAt((ev.clientX-rect.left)*logicalW/rect.width);
+  });
+  canvas.addEventListener('mouseleave', ()=>{
+    if(!lastResult) return;
+    redrawFromCache();
+    scrubReadout.innerHTML = '<span class="label">Move the mouse over the plot &rarr;</span>';
+  });
+
+  $('btnCompute').addEventListener('click', sweep);
+  // Pitch in nm = 10^9 / density in m^-1; neither input is rounded.
+  function syncGratingInputs(sourceId, targetId){
+    const value = Number($(sourceId).value);
+    const reciprocal = 1e9 / value;
+    $(targetId).value = value > 0 && Number.isFinite(reciprocal) ? reciprocal : '';
+  }
+  $('p_Lambda').addEventListener('input', ()=>syncGratingInputs('p_Lambda', 'p_pitch'));
+  $('p_pitch').addEventListener('input', ()=>syncGratingInputs('p_pitch', 'p_Lambda'));
+
+  $('btnReset').addEventListener('click', ()=>{
+    // Restore every form control to the default declared in this page.
+    document.querySelectorAll('input, select').forEach(control=>{
+      if(control.type === 'checkbox') control.checked = control.defaultChecked;
+      else control.value = control.defaultValue;
+    });
+    sweep();
+  });
+  document.querySelectorAll('[data-span]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      $('v_center').value = 0;
+      $('v_span').value = Number(btn.getAttribute('data-span')) * 1000;
+      sweep();
+    });
+  });
+
+  sweep();
+})();
+</script>
+</body>
+</html>
